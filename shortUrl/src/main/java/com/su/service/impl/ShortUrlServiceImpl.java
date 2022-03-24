@@ -2,13 +2,12 @@ package com.su.service.impl;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.hash.HashCode;
-import com.google.common.hash.Hashing;
 import com.su.service.IShortUrlService;
+import com.su.service.IUrlSuffixService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -18,8 +17,9 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class ShortUrlServiceImpl implements IShortUrlService {
 
-    @Value("${su.prefix}")
     private String prefix;
+
+    private IUrlSuffixService urlSuffixService;
 
     private Cache<String, String> shortUrlCache =
             CacheBuilder.newBuilder().expireAfterWrite(15, TimeUnit.MINUTES).maximumSize(1000).build();
@@ -27,21 +27,27 @@ public class ShortUrlServiceImpl implements IShortUrlService {
     private Cache<String, String> longUrlCache =
             CacheBuilder.newBuilder().expireAfterWrite(15, TimeUnit.MINUTES).maximumSize(1000).build();
 
+
+    public ShortUrlServiceImpl(@Value("${su.prefix}") String prefix, @Autowired IUrlSuffixService urlSuffixService) {
+        this.prefix = prefix;
+        this.urlSuffixService = urlSuffixService;
+    }
+
     @Override
     public String getShortUrl(String url) {
-        if(longUrlCache.asMap().containsKey(url)){
+        if (longUrlCache.asMap().containsKey(url)) {
             return longUrlCache.asMap().get(url);
         }
         String surl = url;
+        boolean flag = false;
         while (true) {
-            HashCode hashCode = Hashing.murmur3_32().hashString(surl, StandardCharsets.UTF_8);
-            String shortUrl = prefix + hashCode.toString();
-            if (!shortUrlCache.asMap().values().contains(shortUrl)) {
+            String shortUrl = prefix + urlSuffixService.getSuffix(surl);
+            if (!shortUrlCache.asMap().keySet().contains(shortUrl)) {
                 shortUrlCache.put(shortUrl, url);
-                longUrlCache.put(url,shortUrl);
+                longUrlCache.put(url, shortUrl);
                 return shortUrl;
             }
-            surl += System.currentTimeMillis();
+            surl = url + "/" + System.currentTimeMillis();
         }
     }
 
